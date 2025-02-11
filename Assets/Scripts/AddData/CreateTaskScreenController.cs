@@ -1,171 +1,202 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using AddTask;
 using Bitsplash.DatePicker;
-using DanielLochner.Assets.SimpleScrollSnap;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class CreateTaskScreenController : MonoBehaviour
+namespace AddData
 {
-    public enum ScreenType
+    public class CreateTaskScreenController : MonoBehaviour
     {
-        Lessons,
-        HomeTasks,
-        Projects
-    }
-    
-    [Header("Navigation")]
-    [SerializeField] private Button _backButton;
-    [SerializeField] private Button _lessonsButton;
-    [SerializeField] private Button _homeTasksButton;
-    [SerializeField] private Button _projectsButton;
-    
-    [Header("Screen GameObjects")]
-    [SerializeField] private GameObject _homeTaskScreen;
-    [SerializeField] private GameObject _projectScreen;
-    [SerializeField] private GameObject _lessonScreen;
-    
-    [Header("HomeTask Fields")]
-    [SerializeField] private TMP_InputField _homeTaskNameInput;
-    [SerializeField] private TMP_InputField _subjectInput;
-    [SerializeField] private Button _dateButton;
-    [SerializeField] private TMP_Text _dateText;
-    [SerializeField] private Button _timeButton;
-    [SerializeField] private TMP_Text _timeText;
-    [SerializeField] private Button _priorityButton;
-    [SerializeField] private GameObject _priorityMenu;
-    [SerializeField] private Button _saveHomeTaskButton;
-    
-    [Header("Project Fields")]
-    [SerializeField] private TMP_InputField _projectNameInput;
-    [SerializeField] private Button _projectDateButton;
-    [SerializeField] private TMP_Text _projectDateText;
-    [SerializeField] private Button _addTaskButton;
-    [SerializeField] private Transform _tasksContainer;
-    [SerializeField] private GameObject _taskItemPrefab;
-    [SerializeField] private Button _saveProjectButton;
-    
-    [Header("Button Colors")]
-    [SerializeField] private Color _activeButtonColor;
-    [SerializeField] private Color _inactiveButtonColor;
-    
-    [SerializeField] private DatePickerSettings _datePicker;
-    [SerializeField] private TimeSelector _timeSelector;
-    private string _selectedPriority = "";
-    
-    private void Start()
-    {
-        InitializeUI();
-        SetupListeners();
-    }
-    
-    private void InitializeUI()
-    {
-        _saveHomeTaskButton.interactable = false;
-        _saveProjectButton.interactable = false;
+        [Header("Navigation")] [SerializeField]
+        private Button _backButton;
 
-        _dateText.text = DateTime.Now.ToString("MMM dd, yyyy");
-        _projectDateText.text = DateTime.Now.ToString("MMM dd, yyyy");
-    }
+        [SerializeField] private Button _lessonsButton;
+        [SerializeField] private Button _homeTasksButton;
+        [SerializeField] private Button _projectsButton;
 
-    private void SetupListeners()
-    {
-        _backButton.onClick.AddListener(OnBackButtonClick);
-        _lessonsButton.onClick.AddListener(() => ShowScreen(ScreenType.Lessons));
-        _homeTasksButton.onClick.AddListener(() => ShowScreen(ScreenType.HomeTasks));
-        _projectsButton.onClick.AddListener(() => ShowScreen(ScreenType.Projects));
-        
-        _dateButton.onClick.AddListener(() => ShowDatePicker(_dateText));
-        _timeButton.onClick.AddListener(ShowTimePicker);
-        _priorityButton.onClick.AddListener(TogglePriorityMenu);
-        
-        _projectDateButton.onClick.AddListener(() => ShowDatePicker(_projectDateText));
-        _addTaskButton.onClick.AddListener(ShowAddTaskDialog);
-        
-        _homeTaskNameInput.onValueChanged.AddListener(_ => ValidateHomeTaskInputs());
-        _subjectInput.onValueChanged.AddListener(_ => ValidateHomeTaskInputs());
-        _projectNameInput.onValueChanged.AddListener(_ => ValidateProjectInputs());
-    }
+        [Header("Screen GameObjects")] [SerializeField]
+        private HomeTaskScreen _homeTaskScreen;
 
-    private void ShowScreen(ScreenType screenType)
-    {
-        _homeTaskScreen.SetActive(screenType == ScreenType.HomeTasks);
-        _projectScreen.SetActive(screenType == ScreenType.Projects);
-        _lessonScreen.SetActive(screenType == ScreenType.Lessons);
-        
-        _homeTasksButton.GetComponent<Image>().color = screenType == ScreenType.HomeTasks ? _activeButtonColor : _inactiveButtonColor;
-        _projectsButton.GetComponent<Image>().color = screenType == ScreenType.Projects ? _activeButtonColor : _inactiveButtonColor;
-        _lessonsButton.GetComponent<Image>().color = screenType == ScreenType.Lessons ? _activeButtonColor : _inactiveButtonColor;
-    }
+        [SerializeField] private ProjectsScreen _projectScreen;
+        [SerializeField] private LessonsScreen _lessonScreen;
+        [SerializeField] private MainScreenController _mainScreenController;
 
-    private void ShowDatePicker(TMP_Text targetText)
-    {
-        _datePicker.Show((date) =>
+        [Header("Button Colors")] [SerializeField]
+        private Color _activeButtonColor;
+
+        [SerializeField] private Color _inactiveButtonColor;
+
+        private Dictionary<Button, GameObject> _screenMapping;
+        private Button _currentActiveButton;
+
+        public event Action<HomeTask> OnHomeTaskCreated;
+        public event Action<Project> OnProjectCreated;
+        public event Action<Lesson> OnLessonCreated;
+        public event Action OnBackPressed;
+
+        #region Unity Lifecycle
+
+        private void Awake()
         {
-            targetText.text = date.ToString("MMM dd, yyyy");
-            ValidateAllInputs();
-        });
-    }
-    
-    private void ShowTimePicker()
-    {
-        _timeSelector.gameObject.SetActive(true);
-        _timeSelector.OnSelectionChanged.AddListener((index) =>
+            if (_backButton == null || _lessonsButton == null || _homeTasksButton == null ||
+                _projectsButton == null || _homeTaskScreen == null || _projectScreen == null ||
+                _lessonScreen == null)
+            {
+                Debug.LogError("Required components are not assigned in the inspector", this);
+                enabled = false;
+                return;
+            }
+
+            InitializeScreenMapping();
+        }
+
+        private void OnEnable()
         {
-            _timeText.text = _timeSelector.GetCurrentPanel().GetComponent<TimeOption>().TimeValue;
-            ValidateAllInputs();
-        });
-    }
-    
-    private void TogglePriorityMenu()
-    {
-        _priorityMenu.SetActive(!_priorityMenu.activeSelf);
-    }
-    
-    public void SetPriority(string priority)
-    {
-        _selectedPriority = priority;
-        _priorityButton.GetComponentInChildren<TMP_Text>().text = priority;
-        _priorityMenu.SetActive(false);
-        ValidateAllInputs();
-    }
-    
-    private void ValidateHomeTaskInputs()
-    {
-        bool isValid = !string.IsNullOrEmpty(_homeTaskNameInput.text) &&
-                      !string.IsNullOrEmpty(_subjectInput.text) &&
-                      !string.IsNullOrEmpty(_timeText.text) &&
-                      !string.IsNullOrEmpty(_selectedPriority);
-        
-        _saveHomeTaskButton.interactable = isValid;
-    }
-    
-    private void ValidateProjectInputs()
-    {
-        bool isValid = !string.IsNullOrEmpty(_projectNameInput.text) &&
-                      _tasksContainer.childCount > 0;
-        
-        _saveProjectButton.interactable = isValid;
-    }
-    
-    private void ValidateAllInputs()
-    {
-        ValidateHomeTaskInputs();
-        ValidateProjectInputs();
-    }
-    
-    private void ShowAddTaskDialog()
-    {
-        GameObject taskItem = Instantiate(_taskItemPrefab, _tasksContainer);
-        TaskItemUI taskItemUI = taskItem.GetComponent<TaskItemUI>();
-        taskItemUI.Initialize(() => ValidateProjectInputs());
-    }
-    
-    private void OnBackButtonClick()
-    {
-        gameObject.SetActive(false);
+            _homeTasksButton.image.color = _inactiveButtonColor;
+            _lessonsButton.image.color = _inactiveButtonColor;
+            _projectsButton.image.color = _inactiveButtonColor;
+
+            SubscribeToEvents();
+            ShowHomeTaskScreen();
+            _homeTasksButton.image.color = _activeButtonColor;
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeFromEvents();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        private void InitializeScreenMapping()
+        {
+            _screenMapping = new Dictionary<Button, GameObject>
+            {
+                { _homeTasksButton, _homeTaskScreen.gameObject },
+                { _projectsButton, _projectScreen.gameObject },
+                { _lessonsButton, _lessonScreen.gameObject }
+            };
+
+            // Initially disable all screens
+            foreach (var screen in _screenMapping.Values)
+            {
+                screen.SetActive(false);
+            }
+        }
+
+        private void SubscribeToEvents()
+        {
+            _backButton.onClick.AddListener(OnBackButtonClick);
+            _lessonsButton.onClick.AddListener(ShowLessonsScreen);
+            _homeTasksButton.onClick.AddListener(ShowHomeTaskScreen);
+            _projectsButton.onClick.AddListener(ShowProjectsScreen);
+
+            // Subscribe to screen events
+            _homeTaskScreen.OnHomeTaskCreated += HandleHomeTaskCreated;
+            _projectScreen.OnProjectCreated += HandleProjectCreated;
+            _lessonScreen.OnLessonCreated += HandleLessonCreated;
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            _backButton.onClick.RemoveListener(OnBackButtonClick);
+            _lessonsButton.onClick.RemoveListener(ShowLessonsScreen);
+            _homeTasksButton.onClick.RemoveListener(ShowHomeTaskScreen);
+            _projectsButton.onClick.RemoveListener(ShowProjectsScreen);
+
+            // Unsubscribe from screen events
+            _homeTaskScreen.OnHomeTaskCreated -= HandleHomeTaskCreated;
+            _projectScreen.OnProjectCreated -= HandleProjectCreated;
+            _lessonScreen.OnLessonCreated -= HandleLessonCreated;
+        }
+
+        #endregion
+
+        #region Navigation
+
+        private void OnBackButtonClick()
+        {
+            OnBackPressed?.Invoke();
+            gameObject.SetActive(false);
+        }
+
+        private void ShowHomeTaskScreen()
+        {
+            SwitchScreen(_homeTasksButton);
+        }
+
+        private void ShowProjectsScreen()
+        {
+            SwitchScreen(_projectsButton);
+        }
+
+        private void ShowLessonsScreen()
+        {
+            SwitchScreen(_lessonsButton);
+        }
+
+        private void SwitchScreen(Button selectedButton)
+        {
+            if (_currentActiveButton == selectedButton) return;
+
+            // Deactivate current screen and button
+            if (_currentActiveButton != null)
+            {
+                _currentActiveButton.image.color = _inactiveButtonColor;
+                _screenMapping[_currentActiveButton].SetActive(false);
+            }
+
+            // Activate new screen and button
+            selectedButton.GetComponent<Image>().color = _activeButtonColor;
+            _screenMapping[selectedButton].SetActive(true);
+
+            _currentActiveButton = selectedButton;
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        private void HandleHomeTaskCreated(HomeTask homeTask)
+        {
+            OnHomeTaskCreated?.Invoke(homeTask);
+            _mainScreenController.gameObject.SetActive(true);
+            gameObject.SetActive(false);
+        }
+
+        private void HandleProjectCreated(Project project)
+        {
+            OnProjectCreated?.Invoke(project);
+            _mainScreenController.gameObject.SetActive(true);
+            gameObject.SetActive(false);
+        }
+
+        private void HandleLessonCreated(Lesson lesson)
+        {
+            OnLessonCreated?.Invoke(lesson);
+            _mainScreenController.gameObject.SetActive(true);
+            gameObject.SetActive(false);
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public void Show()
+        {
+            gameObject.SetActive(true);
+            ShowHomeTaskScreen();
+        }
+
+        public void Hide()
+        {
+            gameObject.SetActive(false);
+        }
+
+        #endregion
     }
 }

@@ -3,10 +3,15 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
+using AddData;
+using CalendarScreen;
+using OpenProject;
 using TMPro;
 
 public class MainScreenController : MonoBehaviour
 {
+    #region Serialized Fields
+
     [Header("Filter")] [SerializeField] private Button _filterButton;
     [SerializeField] private GameObject _filterPanel;
     [SerializeField] private List<FilterButton> _filterToggles;
@@ -14,41 +19,110 @@ public class MainScreenController : MonoBehaviour
 
     [Header("Projects")] [SerializeField] private GameObject _projectPlane;
     [SerializeField] private Transform _projectsContainer;
-    [SerializeField] private GameObject _projectPrefab;
+    [SerializeField] private ProjectUI _projectPrefab;
 
     [Header("Lessons")] [SerializeField] private GameObject _lessonsPlane;
     [SerializeField] private Transform _lessonsContainer;
-    [SerializeField] private GameObject _lessonPrefab;
+    [SerializeField] private LessonUI _lessonPrefab;
     [SerializeField] private Button _lessonsWrapButton;
     [SerializeField] private GameObject _lessonsScrollView;
 
     [Header("HomeTasks")] [SerializeField] private GameObject _hometaskPlane;
     [SerializeField] private Transform _homeTasksContainer;
-    [SerializeField] private GameObject _homeTaskPrefab;
+    [SerializeField] private HomeTaskUI _homeTaskPrefab;
     [SerializeField] private Button _homeTasksWrapButton;
     [SerializeField] private GameObject _homeTasksScrollView;
 
-    [Header("Empty State")] [SerializeField]
-    private GameObject _emptyStateObject;
-
-    [SerializeField] private DataManager _dataManager;
-
-    [SerializeField] private GameObject createTaskScreen;
-
+    [Header("Other UI")] [SerializeField] private GameObject _emptyStateObject;
     [SerializeField] private Button _addTaskButton;
+    [SerializeField] private CreateTaskScreenController _addTaskScreen;
+
+    [Header("Data")] [SerializeField] private DataManager _dataManager;
+
+    [SerializeField] private CalendarScreenController _calendarScreenController;
+
+    [SerializeField] private Button _calendarButton;
+    [SerializeField] private Button _settingsButton;
+
+    [Header("Edit Screens")] [SerializeField]
+    private LessonsScreen _editLessonsScreen;
+
+    [SerializeField] private ProjectsScreen _editProjectScreen;
+    [SerializeField] private HomeTaskScreen _editHomeTaskScreen;
+
+    [SerializeField] private OpenProjectScreen _openProjectScreen;
+
+    #endregion
+
+    #region Private Fields
+
+    private bool _hasProjects;
+    private bool _hasLessons;
+    private bool _hasHomeTasks;
+
+    #endregion
+
+    #region Unity Lifecycle
 
     private void Start()
     {
         LoadTodayData();
-        ToggleFilterPanel();
+        ToggleFilterPanel(false);
+        _addTaskScreen.gameObject.SetActive(false);
+
+        if (_editLessonsScreen != null) _editLessonsScreen.gameObject.SetActive(false);
+        if (_editProjectScreen != null) _editProjectScreen.gameObject.SetActive(false);
+        if (_editHomeTaskScreen != null) _editHomeTaskScreen.gameObject.SetActive(false);
     }
 
     private void OnEnable()
     {
-        _filterButton.onClick.AddListener(ToggleFilterPanel);
+        SubscribeToEvents();
+        LoadTodayData();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromEvents();
+        if (_openProjectScreen != null)
+        {
+            _openProjectScreen.OnProjectUpdated -= HandleProjectUpdated;
+        }
+    }
+
+    #endregion
+
+    #region Event Subscription
+
+    private void SubscribeToEvents()
+    {
+        _filterButton.onClick.AddListener((() => ToggleFilterPanel()));
         _lessonsWrapButton.onClick.AddListener(() => ToggleScrollView(_lessonsScrollView));
         _homeTasksWrapButton.onClick.AddListener(() => ToggleScrollView(_homeTasksScrollView));
-        _addTaskButton.onClick.AddListener(() => createTaskScreen.SetActive(true));
+        _addTaskButton.onClick.AddListener(() => _addTaskScreen.gameObject.SetActive(true));
+        _calendarButton.onClick.AddListener(() => _calendarScreenController.gameObject.SetActive(true));
+
+        if (_addTaskScreen != null)
+        {
+            _addTaskScreen.OnProjectCreated += HandleProjectCreated;
+            _addTaskScreen.OnLessonCreated += HandleLessonCreated;
+            _addTaskScreen.OnHomeTaskCreated += HandleHomeTaskCreated;
+        }
+
+        if (_editLessonsScreen != null)
+        {
+            _editLessonsScreen.OnLessonEdited += HandleLessonEdited;
+        }
+
+        if (_editProjectScreen != null)
+        {
+            _editProjectScreen.OnProjectEdited += HandleProjectEdited;
+        }
+
+        if (_editHomeTaskScreen != null)
+        {
+            _editHomeTaskScreen.OnHomeTaskEdited += HandleHomeTaskEdited;
+        }
 
         foreach (var toggle in _filterToggles)
         {
@@ -56,28 +130,160 @@ public class MainScreenController : MonoBehaviour
         }
     }
 
-    private void OnDisable()
+    private void UnsubscribeFromEvents()
     {
-        _filterButton.onClick.RemoveListener(ToggleFilterPanel);
+        _filterButton.onClick.RemoveListener((() => ToggleFilterPanel()));
         _lessonsWrapButton.onClick.RemoveListener(() => ToggleScrollView(_lessonsScrollView));
         _homeTasksWrapButton.onClick.RemoveListener(() => ToggleScrollView(_homeTasksScrollView));
-        _addTaskButton.onClick.RemoveListener(() => createTaskScreen.SetActive(true));
-        
+        _addTaskButton.onClick.RemoveListener(() => _addTaskScreen.gameObject.SetActive(true));
+        _calendarButton.onClick.RemoveListener(() => _calendarScreenController.gameObject.SetActive(true));
+
+
+        if (_addTaskScreen != null)
+        {
+            _addTaskScreen.OnProjectCreated -= HandleProjectCreated;
+            _addTaskScreen.OnLessonCreated -= HandleLessonCreated;
+            _addTaskScreen.OnHomeTaskCreated -= HandleHomeTaskCreated;
+        }
+
+        if (_editLessonsScreen != null)
+        {
+            _editLessonsScreen.OnLessonEdited -= HandleLessonEdited;
+        }
+
+        if (_editProjectScreen != null)
+        {
+            _editProjectScreen.OnProjectEdited -= HandleProjectEdited;
+        }
+
+        if (_editHomeTaskScreen != null)
+        {
+            _editHomeTaskScreen.OnHomeTaskEdited -= HandleHomeTaskEdited;
+        }
+
         foreach (var toggle in _filterToggles)
         {
             toggle.FilterClicked -= ApplyFilter;
         }
+        
+        foreach (Transform child in _lessonsContainer)
+        {
+            LessonUI lessonUI = child.GetComponent<LessonUI>();
+            if (lessonUI != null)
+            {
+                lessonUI.LessonEdit -= OpenLessonEditScreen;
+                lessonUI.LessonDelete -= HandleLessonDeleted;
+            }
+        }
+
+        foreach (Transform child in _homeTasksContainer)
+        {
+            HomeTaskUI taskUI = child.GetComponent<HomeTaskUI>();
+            if (taskUI != null)
+            {
+                taskUI.HomeTaskEdit -= OpenHomeTaskEditScreen;
+                taskUI.HomeTaskDelete -= HandleHomeTaskDeleted;
+            }
+        }
     }
 
-    private void LoadTodayData()
-    {
-        var todayData = _dataManager.GetTodayData();
-        bool hasData = false;
+    #endregion
 
-        // Load Projects
-        if (todayData.projects.Any())
+    #region Task Creation Handlers
+
+    public void HandleProjectCreated(Project project)
+    {
+        ProjectUI projectUI = Instantiate(_projectPrefab, _projectsContainer);
+        projectUI.Initialize(project);
+
+        _projectPlane.gameObject.SetActive(true);
+        _hasProjects = true;
+        UpdateEmptyState();
+    }
+
+    public void HandleLessonCreated(Lesson lesson)
+    {
+        LessonUI lessonUI = Instantiate(_lessonPrefab, _lessonsContainer);
+        lessonUI.Initialize(lesson,_dataManager);
+        lessonUI.LessonEdit += OpenLessonEditScreen;
+
+        _lessonsPlane.SetActive(true);
+        _hasLessons = true;
+        UpdateEmptyState();
+    }
+
+    public void HandleHomeTaskCreated(HomeTask homeTask)
+    {
+        HomeTaskUI homeTaskUI = Instantiate(_homeTaskPrefab, _homeTasksContainer);
+        homeTaskUI.Initialize(homeTask, _dataManager);
+        homeTaskUI.HomeTaskEdit += OpenHomeTaskEditScreen;
+
+        _hometaskPlane.SetActive(true);
+        _hasHomeTasks = true;
+        UpdateEmptyState();
+    }
+    
+    private void HandleLessonDeleted(Lesson lesson)
+    {
+        _dataManager.RemoveLesson(lesson);
+        foreach (Transform child in _lessonsContainer)
         {
-            hasData = true;
+            LessonUI lessonUI = child.GetComponent<LessonUI>();
+            if (lessonUI != null && lessonUI.Lesson == lesson)
+            {
+                Destroy(child.gameObject);
+                break;
+            }
+        }
+    
+        _hasLessons = _lessonsContainer.childCount > 0;
+        UpdateEmptyState();
+    }
+
+    private void HandleHomeTaskDeleted(HomeTask homeTask)
+    {
+        _dataManager.RemoveHomeTask(homeTask);
+        foreach (Transform child in _homeTasksContainer)
+        {
+            HomeTaskUI taskUI = child.GetComponent<HomeTaskUI>();
+            if (taskUI != null && taskUI.HomeTask == homeTask)
+            {
+                Destroy(child.gameObject);
+                break;
+            }
+        }
+    
+        _hasHomeTasks = _homeTasksContainer.childCount > 0;
+        UpdateEmptyState();
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    public void LoadTodayData()
+    {
+        foreach (Transform child in _projectsContainer)
+        {
+            Destroy(child.gameObject);
+        }
+        
+        foreach (Transform child in _lessonsContainer)
+        {
+            Destroy(child.gameObject);
+        }
+
+        foreach (Transform child in _homeTasksContainer)
+        {
+            Destroy(child.gameObject);
+        }
+        
+        var todayData = _dataManager.GetTodayData();
+        
+        // Load Projects
+        _hasProjects = todayData.projects.Any();
+        if (_hasProjects)
+        {
             foreach (var project in todayData.projects)
             {
                 CreateProjectUI(project);
@@ -85,9 +291,9 @@ public class MainScreenController : MonoBehaviour
         }
 
         // Load Lessons
-        if (todayData.lessons.Any())
+        _hasLessons = todayData.lessons.Any();
+        if (_hasLessons)
         {
-            hasData = true;
             foreach (var lesson in todayData.lessons)
             {
                 CreateLessonUI(lesson);
@@ -95,78 +301,231 @@ public class MainScreenController : MonoBehaviour
         }
 
         // Load HomeTasks
-        if (todayData.homeTasks.Any())
+        _hasHomeTasks = todayData.homeTasks.Any();
+        if (_hasHomeTasks)
         {
-            hasData = true;
             foreach (var homeTask in todayData.homeTasks)
             {
                 CreateHomeTaskUI(homeTask);
             }
         }
 
-        _emptyStateObject.SetActive(!hasData);
-        _hometaskPlane.SetActive(hasData);
-        _lessonsPlane.SetActive(hasData);
-        _projectPlane.SetActive(hasData);
+        UpdateUIVisibility();
     }
 
     private void CreateProjectUI(Project project)
     {
-        var projectGO = Instantiate(_projectPrefab, _projectsContainer);
-        var projectUI = projectGO.GetComponent<ProjectUI>();
+        ProjectUI projectUI = Instantiate(_projectPrefab, _projectsContainer);
         projectUI.Initialize(project);
+        projectUI.ProjectEdit += OpenProjectEditScreen;
+        projectUI.ProjectSelected += HandleProjectSelected;
+    }
+
+    private void HandleProjectSelected(Project project)
+    {
+        if (_openProjectScreen != null)
+        {
+            _openProjectScreen.gameObject.SetActive(true);
+            _openProjectScreen.OpenScreen(project);
+            _openProjectScreen.OnProjectUpdated += HandleProjectUpdated; // Subscribe to project updates
+        }
+    }
+    
+    private void HandleProjectUpdated(Project project)
+    {
+        // Find and update the corresponding ProjectUI
+        foreach (Transform child in _projectsContainer)
+        {
+            ProjectUI projectUI = child.GetComponent<ProjectUI>();
+            if (projectUI != null && projectUI.Project == project)
+            {
+                projectUI.UpdateUI();
+                break;
+            }
+        }
     }
 
     private void CreateLessonUI(Lesson lesson)
     {
-        var lessonGO = Instantiate(_lessonPrefab, _lessonsContainer);
-        var lessonUI = lessonGO.GetComponent<LessonUI>();
-        lessonUI.Initialize(lesson);
+        LessonUI lessonUI = Instantiate(_lessonPrefab, _lessonsContainer);
+        lessonUI.Initialize(lesson, _dataManager);
+        lessonUI.LessonEdit += OpenLessonEditScreen;
+        lessonUI.LessonDelete += HandleLessonDeleted; // Add this line
     }
 
     private void CreateHomeTaskUI(HomeTask homeTask)
     {
-        var homeTaskGO = Instantiate(_homeTaskPrefab, _homeTasksContainer);
-        var homeTaskUI = homeTaskGO.GetComponent<HomeTaskUI>();
-        homeTaskUI.Initialize(homeTask);
+        HomeTaskUI homeTaskUI = Instantiate(_homeTaskPrefab, _homeTasksContainer);
+        homeTaskUI.Initialize(homeTask, _dataManager);
+        homeTaskUI.HomeTaskEdit += OpenHomeTaskEditScreen;
+        homeTaskUI.HomeTaskDelete += HandleHomeTaskDeleted; // Add this line
     }
 
-    private void ToggleFilterPanel()
+    #endregion
+
+    private void OpenLessonEditScreen(Lesson lesson)
     {
-        _filterPanel.SetActive(!_filterPanel.activeSelf);
+        if (_editLessonsScreen != null)
+        {
+            _editLessonsScreen.gameObject.SetActive(true);
+            _editLessonsScreen.SetLessonForEdit(lesson);
+        }
     }
 
+    private void OpenProjectEditScreen(Project project)
+    {
+        if (_editProjectScreen != null)
+        {
+            _editProjectScreen.gameObject.SetActive(true);
+            _editProjectScreen.SetProjectForEdit(project);
+        }
+    }
+
+    private void OpenHomeTaskEditScreen(HomeTask homeTask)
+    {
+        if (_editHomeTaskScreen != null)
+        {
+            _editHomeTaskScreen.gameObject.SetActive(true);
+            _editHomeTaskScreen.SetHomeTaskForEdit(homeTask);
+        }
+    }
+
+    private void HandleProjectEdited(Project oldProject, Project newProject)
+    {
+        foreach (Transform child in _projectsContainer)
+        {
+            ProjectUI projectUI = child.GetComponent<ProjectUI>();
+            if (projectUI != null && projectUI.Project == oldProject)
+            {
+                Destroy(child.gameObject);
+                break;
+            }
+        }
+
+        CreateProjectUI(newProject);
+        _hasProjects = _projectsContainer.childCount > 0;
+        UpdateEmptyState();
+
+        if (_editProjectScreen != null)
+        {
+            _editProjectScreen.gameObject.SetActive(false);
+        }
+    }
+
+    private void HandleLessonEdited(Lesson oldLesson, Lesson newLesson)
+    {
+        foreach (Transform child in _lessonsContainer)
+        {
+            LessonUI lessonUI = child.GetComponent<LessonUI>();
+            if (lessonUI != null && lessonUI.Lesson == oldLesson)
+            {
+                Destroy(child.gameObject);
+                break;
+            }
+        }
+
+        CreateLessonUI(newLesson);
+        _hasLessons = _lessonsContainer.childCount > 0;
+        UpdateEmptyState();
+
+        if (_editLessonsScreen != null)
+        {
+            _editLessonsScreen.gameObject.SetActive(false);
+        }
+    }
+
+    private void HandleHomeTaskEdited(HomeTask oldTask, HomeTask newTask)
+    {
+        foreach (Transform child in _homeTasksContainer)
+        {
+            HomeTaskUI taskUI = child.GetComponent<HomeTaskUI>();
+            if (taskUI != null && taskUI.HomeTask == oldTask)
+            {
+                Destroy(child.gameObject);
+                break;
+            }
+        }
+
+        CreateHomeTaskUI(newTask);
+        _hasHomeTasks = _homeTasksContainer.childCount > 0;
+        UpdateEmptyState();
+
+        if (_editHomeTaskScreen != null)
+        {
+            _editHomeTaskScreen.gameObject.SetActive(false);
+        }
+    }
+
+    #region UI State Management
+
+    private void UpdateUIVisibility()
+    {
+        bool hasAnyData = _hasProjects || _hasLessons || _hasHomeTasks;
+        _emptyStateObject.SetActive(!hasAnyData);
+        _hometaskPlane.SetActive(_hasHomeTasks);
+        _lessonsPlane.SetActive(_hasLessons);
+        _projectPlane.SetActive(_hasProjects);
+    }
+
+    private void UpdateEmptyState()
+    {
+        bool hasAnyData = _hasProjects || _hasLessons || _hasHomeTasks;
+        _emptyStateObject.SetActive(!hasAnyData);
+    }
+
+    private void ToggleFilterPanel(bool? forcedState = null)
+    {
+        bool newState = forcedState ?? !_filterPanel.activeSelf;
+        Debug.Log($"Toggle Filter Panel - Current state: {_filterPanel.activeSelf}, New state: {newState}");
+        _filterPanel.SetActive(newState);
+    }
     private void ToggleScrollView(GameObject scrollView)
     {
         scrollView.SetActive(!scrollView.activeSelf);
     }
 
+    #endregion
+
+    #region Filtering
+
     private void ApplyFilter(FilterButton button, string filterName)
     {
         foreach (var toggle in _filterToggles)
         {
-            toggle.SetStatus(false);
+            toggle.SetStatus(toggle == button);
         }
 
-        button.SetStatus(true);
-        ToggleFilterPanel();
+        ToggleFilterPanel(false);
+        UpdateFilterText(filterName);
+        UpdateVisibleSections(filterName);
+    }
 
+    private void UpdateFilterText(string filterName)
+    {
+        _filterText.text = filterName switch
+        {
+            "NoFilters" => "No filters",
+            "OnlyProjects" => "Only projects",
+            "OnlyLessons" => "Only lessons",
+            "OnlyHomeTasks" => "Only home tasks",
+            _ => _filterText.text
+        };
+    }
+
+    private void UpdateVisibleSections(string filterName)
+    {
         switch (filterName)
         {
             case "NoFilters":
-                _filterText.text = "No filters";
                 ShowAllSections();
                 break;
             case "OnlyProjects":
-                _filterText.text = "Only projects";
                 ShowOnlyProjects();
                 break;
             case "OnlyLessons":
                 ShowOnlyLessons();
-                _filterText.text = "Only lessons";
                 break;
             case "OnlyHomeTasks":
-                _filterText.text = "Only home tasks";
                 ShowOnlyHomeTasks();
                 break;
         }
@@ -199,36 +558,6 @@ public class MainScreenController : MonoBehaviour
         _lessonsScrollView.SetActive(false);
         _homeTasksScrollView.SetActive(true);
     }
-}
 
-[Serializable]
-public class Project
-{
-    public string name;
-    public DateTime creationDate;
-    public List<Task> tasks;
-    public int completedTasks => tasks.Count(t => t.isCompleted);
-}
-
-[Serializable]
-public class Task
-{
-    public string name;
-    public bool isCompleted;
-}
-
-[Serializable]
-public class Lesson
-{
-    public string name;
-    public TimeSpan duration;
-    public DateTime date;
-}
-
-[Serializable]
-public class HomeTask
-{
-    public string name;
-    public string subjectName;
-    public DateTime time;
+    #endregion
 }

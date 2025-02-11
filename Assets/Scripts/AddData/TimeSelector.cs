@@ -25,6 +25,10 @@ namespace AddTask
         public event Action<string> MinuteInputed;
         public event Action<string> AmPmInputed;
 
+        public string Hour => _hour;
+        public string Minute => _minute;
+        public string AmPm => _ampm;
+
         private void OnEnable()
         {
             _hourScrollSnap.OnPanelCentered.AddListener(SetHour);
@@ -93,6 +97,17 @@ namespace AddTask
                 int hour = i % 12 + 1;
                 _hourText[i].text = i < 12 ? hour.ToString("00") : "";
             }
+        }
+        
+        public void SetTime(string hour, string minute, string ampm)
+        {
+            // These fields should already exist in your TimeSelector class
+            _hour = hour;
+            _minute = minute;
+            _ampm = ampm;
+        
+            // Update any UI elements that display the time
+            // This depends on your specific implementation
         }
 
         private void PopulateMinutes()

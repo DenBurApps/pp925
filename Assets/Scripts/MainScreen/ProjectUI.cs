@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using AddData;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -10,13 +13,44 @@ public class ProjectUI : MonoBehaviour
     [SerializeField] private TMP_Text dateText;
     [SerializeField] private TMP_Text tasksText;
     [SerializeField] private Image progressFill;
-    
+    [SerializeField] private Button _editButton;
+
+    public Project Project { get; private set; }
+    public event Action<Project> ProjectSelected;
+    public event Action<Project> ProjectEdit;
+
+    private void Awake()
+    {
+        if (_editButton != null)
+        {
+            _editButton.onClick.AddListener(OnProjectClicked);
+        }
+    }
+
     public void Initialize(Project project)
     {
-        nameText.text = project.name;
-        dateText.text = project.creationDate.ToString("MMM dd, yyyy");
-        tasksText.text = $"{project.completedTasks}/{project.tasks.Count} tasks";
-        progressFill.fillAmount = project.tasks.Count > 0 ? 
-            (float)project.completedTasks / project.tasks.Count : 0f;
+        Project = project;
+        UpdateUI();
+    }
+
+    public void UpdateUI()
+    {
+        if (Project != null)
+        {
+            nameText.text = Project.Name;
+            dateText.text = Project.Date.ToString("MMM dd, yyyy");
+
+            int totalTasks = Project.TaskDatas.Count;
+            int completedTasks = Project.TaskDatas.Count(task => task.IsCompleted);
+            tasksText.text = $"{completedTasks}/{totalTasks} tasks";
+
+            float fillAmount = totalTasks > 0 ? (float)completedTasks / totalTasks : 0f;
+            progressFill.fillAmount = fillAmount;
+        }
+    }
+
+    private void OnProjectClicked()
+    {
+        ProjectSelected?.Invoke(Project);
     }
 }
