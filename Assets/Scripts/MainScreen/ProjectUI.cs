@@ -16,14 +16,13 @@ public class ProjectUI : MonoBehaviour
     [SerializeField] private Button _editButton;
 
     public Project Project { get; private set; }
-    public event Action<Project> ProjectSelected;
     public event Action<Project> ProjectEdit;
 
     private void Awake()
     {
         if (_editButton != null)
         {
-            _editButton.onClick.AddListener(OnProjectClicked);
+            _editButton.onClick.AddListener(OnEditClicked);
         }
     }
 
@@ -49,8 +48,8 @@ public class ProjectUI : MonoBehaviour
         }
     }
 
-    private void OnProjectClicked()
+    private void OnEditClicked()
     {
-        ProjectSelected?.Invoke(Project);
+        ProjectEdit?.Invoke(Project);
     }
 }

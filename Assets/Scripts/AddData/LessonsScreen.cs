@@ -11,11 +11,12 @@ namespace AddData
     {
         public string Name;
         public DateTime DateTime;
-        public bool IsExpanded { get; set; } 
+        public bool IsExpanded { get; set; }
     }
-    
+
     public class LessonsScreen : MonoBehaviour
     {
+        #region Serialized Fields
         [SerializeField] private TMP_InputField _nameInput;
         [SerializeField] private TMP_Text _timeText;
         [SerializeField] private TMP_Text _dateText;
@@ -25,57 +26,45 @@ namespace AddData
         [SerializeField] private Button _timeButton;
         [SerializeField] private GameObject _timeScroll;
         [SerializeField] private Button _saveButton;
+        #endregion
 
+        #region Private Fields
         private Lesson _lessonToEdit;
-        
         private string _name;
         private DateTime _date;
         private string _time;
+        private bool _componentsValidated;
+        private bool _isInitialized;
+        #endregion
 
+        #region Events
         public event Action<Lesson> OnLessonCreated;
-        public event Action<Lesson, Lesson> OnLessonEdited; 
+        public event Action<Lesson, Lesson> OnLessonEdited;
+        #endregion
 
         #region Unity Lifecycle
         private void Awake()
         {
             ValidateComponents();
-            InitializeComponents();
+            if (_componentsValidated)
+            {
+                InitializeComponents();
+                _isInitialized = true;
+            }
         }
-        
+
         private void OnEnable()
         {
-            SubscribeToEvents();
-            if (_lessonToEdit == null)
+            if (_componentsValidated)
             {
-                ResetUI();
-                _date = DateTime.Now;
-                UpdateDateTimeDisplay();
+                SubscribeToEvents();
+                if (_lessonToEdit == null)
+                {
+                    ResetUI();
+                    _date = DateTime.Now;
+                    UpdateDateTimeDisplay();
+                }
             }
-            
-        }
-        
-        public void SetLessonForEdit(Lesson lesson)
-        {
-            _lessonToEdit = lesson;
-            _name = lesson.Name;
-            _date = lesson.DateTime;
-            
-            // Update UI
-            _nameInput.text = _name;
-            UpdateDateTimeDisplay();
-            
-            ValidateInputs();
-        }
-        
-        private void UpdateDateTimeDisplay()
-        {
-            _dateText.text = _date.ToString("MMM dd, yyyy");
-            
-            string ampm = _date.Hour >= 12 ? "PM" : "AM";
-            int hour = _date.Hour % 12;
-            if (hour == 0) hour = 12;
-            _time = $"{hour}:{_date.Minute:D2} {ampm}";
-            _timeText.text = _time;
         }
 
         private void OnDisable()
@@ -89,65 +78,18 @@ namespace AddData
         }
         #endregion
 
-        #region Initialization
-        private void ValidateComponents()
+        #region Button Click Handlers
+        private void OnTimeButtonClick()
         {
-            if (_saveButton == null || _nameInput == null || _timeSelector == null || 
-                _datePickerSettings == null || _timeText == null || _dateText == null ||
-                _timeButton == null || _timeScroll == null || _dateButton == null)
-            {
-                Debug.LogError("Required components are not assigned in the inspector", this);
-                enabled = false;
-                return;
-            }
+            ToggleTimePlane(true);
         }
 
-        private void InitializeComponents()
+        private void OnDateButtonClick()
         {
-            _saveButton.interactable = false;
-            _nameInput.onValueChanged.AddListener(OnNameChanged);
-            ResetUI();
+            ToggleDatePicker(true);
         }
 
-        private void SubscribeToEvents()
-        {
-            _dateButton.onClick.AddListener(() => ToggleDatePicker(true));
-            _timeSelector.HourInputed += SetHour;
-            _timeSelector.MinuteInputed += SetMinute;
-            _timeSelector.AmPmInputed += SetAmPm;
-            _saveButton.onClick.AddListener(OnSaveButtonClicked);
-            _timeButton.onClick.AddListener(() => ToggleTimePlane(true));
-            _datePickerSettings.Content.OnSelectionChanged.AddListener(OnDateSelected);
-        }
-
-        private void UnsubscribeFromEvents()
-        {
-            if (_dateButton != null)
-                _dateButton.onClick.RemoveListener(() => ToggleDatePicker(true));
-            
-            if (_timeSelector != null)
-            {
-                _timeSelector.HourInputed -= SetHour;
-                _timeSelector.MinuteInputed -= SetMinute;
-                _timeSelector.AmPmInputed -= SetAmPm;
-            }
-            
-            if (_saveButton != null)
-                _saveButton.onClick.RemoveListener(OnSaveButtonClicked);
-            
-            if (_timeButton != null)
-                _timeButton.onClick.RemoveListener(() => ToggleTimePlane(true));
-            
-            if (_datePickerSettings?.Content != null)
-                _datePickerSettings.Content.OnSelectionChanged.RemoveListener(OnDateSelected);
-            
-            if (_nameInput != null)
-                _nameInput.onValueChanged.RemoveListener(OnNameChanged);
-        }
-        #endregion
-
-        #region UI Event Handlers
-        private void OnSaveButtonClicked()
+        private void OnSaveButtonClick()
         {
             Lesson lesson = GetLesson();
             if (lesson != null)
@@ -164,17 +106,223 @@ namespace AddData
                 ResetUI();
             }
         }
+        #endregion
 
+        #region Initialization
+        public void SetLessonForEdit(Lesson lesson)
+        {
+            _lessonToEdit = lesson;
+            _name = lesson.Name;
+            _date = lesson.DateTime;
+
+            // Update UI
+            _nameInput.text = _name;
+            UpdateDateTimeDisplay();
+
+            // Initialize TimeSelector with existing time
+            if (_timeSelector != null)
+            {
+                int hour = _date.Hour % 12;
+                if (hour == 0) hour = 12;
+                string ampm = _date.Hour >= 12 ? "PM" : "AM";
+
+                _timeSelector.SetTimeWithScroll(
+                    hour.ToString("00"),
+                    _date.Minute.ToString("00"),
+                    ampm
+                );
+            }
+
+            ValidateInputs();
+        }
+
+        private void ValidateComponents()
+        {
+            _componentsValidated = true;
+
+            if (_saveButton == null)
+            {
+                Debug.LogError("SaveButton is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_nameInput == null)
+            {
+                Debug.LogError("NameInput is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_timeSelector == null)
+            {
+                Debug.LogError("TimeSelector is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_datePickerSettings == null)
+            {
+                Debug.LogError("DatePickerSettings is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_timeText == null)
+            {
+                Debug.LogError("TimeText is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_dateText == null)
+            {
+                Debug.LogError("DateText is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_timeButton == null)
+            {
+                Debug.LogError("TimeButton is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_timeScroll == null)
+            {
+                Debug.LogError("TimeScroll is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (_dateButton == null)
+            {
+                Debug.LogError("DateButton is not assigned", this);
+                _componentsValidated = false;
+            }
+
+            if (!_componentsValidated)
+            {
+                enabled = false;
+            }
+        }
+
+        private void InitializeComponents()
+        {
+            _saveButton.interactable = false;
+            ResetUI();
+        }
+
+        private void SubscribeToEvents()
+        {
+            Debug.Log("Subscribing to events");
+            
+            if (!_isInitialized) 
+            {
+                Debug.LogWarning("Not initialized, skipping event subscription");
+                return;
+            }
+
+            // Remove existing listeners first
+            UnsubscribeFromEvents();
+
+            // Input field events
+            if (_nameInput != null)
+            {
+                Debug.Log("Adding name input listener");
+                _nameInput.onValueChanged.AddListener(OnNameChanged);
+            }
+            else
+            {
+                Debug.LogError("_nameInput is null during subscription");
+            }
+
+            // Button click events
+            _timeButton?.onClick.AddListener(OnTimeButtonClick);
+            _dateButton?.onClick.AddListener(OnDateButtonClick);
+            _saveButton?.onClick.AddListener(OnSaveButtonClick);
+
+            // TimeSelector events
+            if (_timeSelector != null)
+            {
+                _timeSelector.HourInputed += SetHour;
+                _timeSelector.MinuteInputed += SetMinute;
+                _timeSelector.AmPmInputed += SetAmPm;
+            }
+
+            // DatePicker events
+            if (_datePickerSettings?.Content != null)
+            {
+                _datePickerSettings.Content.OnSelectionChanged.AddListener(OnDateSelected);
+            }
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            Debug.Log("Unsubscribing from events");
+            
+            // Input field events
+            if (_nameInput != null)
+            {
+                Debug.Log("Removing name input listener");
+                _nameInput.onValueChanged.RemoveListener(OnNameChanged);
+            }
+
+            // Button click events
+            if (_timeButton != null)
+            {
+                _timeButton.onClick.RemoveListener(OnTimeButtonClick);
+            }
+
+            if (_dateButton != null)
+            {
+                _dateButton.onClick.RemoveListener(OnDateButtonClick);
+            }
+
+            if (_saveButton != null)
+            {
+                _saveButton.onClick.RemoveListener(OnSaveButtonClick);
+            }
+
+            // TimeSelector events
+            if (_timeSelector != null)
+            {
+                _timeSelector.HourInputed -= SetHour;
+                _timeSelector.MinuteInputed -= SetMinute;
+                _timeSelector.AmPmInputed -= SetAmPm;
+            }
+
+            // DatePicker events
+            if (_datePickerSettings?.Content != null)
+            {
+                _datePickerSettings.Content.OnSelectionChanged.RemoveListener(OnDateSelected);
+            }
+        }
+        #endregion
+
+        #region UI Event Handlers
         private void ToggleTimePlane(bool status)
         {
             if (_timeScroll != null)
             {
-                if (_timeScroll.activeSelf)
+                // If open and trying to open - close
+                if (_timeScroll.activeSelf && status)
                 {
-                    status = false;
+                    _timeScroll.SetActive(false);
+                    ValidateInputs();
+                    return;
                 }
-                
+
                 _timeScroll.SetActive(status);
+
+                // Initialize time when opening
+                if (status)
+                {
+                    DateTime timeToSet = _lessonToEdit != null ? _lessonToEdit.DateTime : DateTime.Now;
+                    int hour = timeToSet.Hour % 12;
+                    if (hour == 0) hour = 12;
+                    string ampm = timeToSet.Hour >= 12 ? "PM" : "AM";
+
+                    _timeSelector.SetTimeWithScroll(
+                        hour.ToString("00"),
+                        timeToSet.Minute.ToString("00"),
+                        ampm
+                    );
+                }
+
                 if (!status)
                 {
                     ValidateInputs();
@@ -198,7 +346,9 @@ namespace AddData
         #region Input Handlers
         private void OnNameChanged(string value)
         {
+            Debug.Log($"Name changed to: {value}");
             _name = value?.Trim();
+            Debug.Log($"Trimmed name: {_name}");
             ValidateInputs();
         }
 
@@ -237,6 +387,17 @@ namespace AddData
                 ValidateInputs();
             }
         }
+
+        private void UpdateDateTimeDisplay()
+        {
+            _dateText.text = _date.ToString("MMM dd, yyyy");
+
+            string ampm = _date.Hour >= 12 ? "PM" : "AM";
+            int hour = _date.Hour % 12;
+            if (hour == 0) hour = 12;
+            _time = $"{hour}:{_date.Minute:D2} {ampm}";
+            _timeText.text = _time;
+        }
         #endregion
 
         #region Helper Methods
@@ -244,10 +405,14 @@ namespace AddData
         {
             if (_saveButton == null) return;
 
-            bool isValid = !string.IsNullOrEmpty(_name?.Trim()) &&
-                          !string.IsNullOrEmpty(_time) &&
-                          _date != default(DateTime) &&
-                          IsValidTime();
+            bool nameValid = !string.IsNullOrEmpty(_name?.Trim());
+            bool timeValid = !string.IsNullOrEmpty(_time);
+            bool dateValid = _date != default(DateTime);
+            bool timeFormatValid = IsValidTime();
+
+            bool isValid = nameValid && timeValid && dateValid && timeFormatValid;
+
+            Debug.Log($"Validation: Name:{nameValid}, Time:{timeValid}, Date:{dateValid}, TimeFormat:{timeFormatValid}");
 
             _saveButton.interactable = isValid;
         }
@@ -255,7 +420,7 @@ namespace AddData
         private bool IsValidTime()
         {
             if (_timeSelector == null) return false;
-            
+
             if (!int.TryParse(_timeSelector.Hour, out int hour) ||
                 !int.TryParse(_timeSelector.Minute, out int minute))
                 return false;
@@ -269,10 +434,10 @@ namespace AddData
         {
             if (_nameInput != null)
                 _nameInput.text = string.Empty;
-            
+
             if (_timeText != null)
                 _timeText.text = string.Empty;
-            
+
             if (_dateText != null)
                 _dateText.text = string.Empty;
 

@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using AddData;
 using CalendarScreen;
 using OpenProject;
@@ -52,6 +53,8 @@ public class MainScreenController : MonoBehaviour
 
     [SerializeField] private OpenProjectScreen _openProjectScreen;
 
+    [SerializeField] private Settings _settings;
+
     #endregion
 
     #region Private Fields
@@ -59,10 +62,17 @@ public class MainScreenController : MonoBehaviour
     private bool _hasProjects;
     private bool _hasLessons;
     private bool _hasHomeTasks;
+    private ScreenVisabilityHandler _screenVisabilityHandler;
 
     #endregion
 
     #region Unity Lifecycle
+
+    private void Awake()
+    {
+        Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        _screenVisabilityHandler = GetComponent<ScreenVisabilityHandler>();
+    }
 
     private void Start()
     {
@@ -89,6 +99,16 @@ public class MainScreenController : MonoBehaviour
             _openProjectScreen.OnProjectUpdated -= HandleProjectUpdated;
         }
     }
+    
+    public void EnableScreen()
+    {
+        _screenVisabilityHandler.EnableScreen();
+    }
+
+    public void DisableScreen()
+    {
+        _screenVisabilityHandler.DisableScreen();
+    }
 
     #endregion
 
@@ -100,7 +120,8 @@ public class MainScreenController : MonoBehaviour
         _lessonsWrapButton.onClick.AddListener(() => ToggleScrollView(_lessonsScrollView));
         _homeTasksWrapButton.onClick.AddListener(() => ToggleScrollView(_homeTasksScrollView));
         _addTaskButton.onClick.AddListener(() => _addTaskScreen.gameObject.SetActive(true));
-        _calendarButton.onClick.AddListener(() => _calendarScreenController.gameObject.SetActive(true));
+        _calendarButton.onClick.AddListener(OpenCalendar);
+        _settingsButton.onClick.AddListener(OpenSettings);
 
         if (_addTaskScreen != null)
         {
@@ -136,8 +157,8 @@ public class MainScreenController : MonoBehaviour
         _lessonsWrapButton.onClick.RemoveListener(() => ToggleScrollView(_lessonsScrollView));
         _homeTasksWrapButton.onClick.RemoveListener(() => ToggleScrollView(_homeTasksScrollView));
         _addTaskButton.onClick.RemoveListener(() => _addTaskScreen.gameObject.SetActive(true));
-        _calendarButton.onClick.RemoveListener(() => _calendarScreenController.gameObject.SetActive(true));
-
+        _calendarButton.onClick.RemoveListener(OpenCalendar);
+        _settingsButton.onClick.RemoveListener(OpenSettings);
 
         if (_addTaskScreen != null)
         {
@@ -187,6 +208,18 @@ public class MainScreenController : MonoBehaviour
         }
     }
 
+    private void OpenCalendar()
+    {
+        _calendarScreenController.EnableScreen();
+        DisableScreen();
+    }
+
+    private void OpenSettings()
+    {
+        _settings.ShowSettings();
+        DisableScreen();
+    }
+    
     #endregion
 
     #region Task Creation Handlers
@@ -194,6 +227,7 @@ public class MainScreenController : MonoBehaviour
     public void HandleProjectCreated(Project project)
     {
         ProjectUI projectUI = Instantiate(_projectPrefab, _projectsContainer);
+        projectUI.ProjectEdit += HandleProjectSelected;
         projectUI.Initialize(project);
 
         _projectPlane.gameObject.SetActive(true);
@@ -317,8 +351,7 @@ public class MainScreenController : MonoBehaviour
     {
         ProjectUI projectUI = Instantiate(_projectPrefab, _projectsContainer);
         projectUI.Initialize(project);
-        projectUI.ProjectEdit += OpenProjectEditScreen;
-        projectUI.ProjectSelected += HandleProjectSelected;
+        projectUI.ProjectEdit += HandleProjectSelected;
     }
 
     private void HandleProjectSelected(Project project)
@@ -369,15 +402,6 @@ public class MainScreenController : MonoBehaviour
         {
             _editLessonsScreen.gameObject.SetActive(true);
             _editLessonsScreen.SetLessonForEdit(lesson);
-        }
-    }
-
-    private void OpenProjectEditScreen(Project project)
-    {
-        if (_editProjectScreen != null)
-        {
-            _editProjectScreen.gameObject.SetActive(true);
-            _editProjectScreen.SetProjectForEdit(project);
         }
     }
 

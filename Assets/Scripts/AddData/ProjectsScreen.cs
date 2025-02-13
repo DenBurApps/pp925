@@ -46,6 +46,7 @@ namespace AddData
         [SerializeField] private Button _backButton;
         [SerializeField] private AddTaskScreen _addTaskScreen;
         [SerializeField] private GameObject _mainContent;
+
         #endregion
 
         #region Private Fields
@@ -53,7 +54,7 @@ namespace AddData
         private string _name;
         private DateTime _date;
         private List<TaskData> _tasks;
-        private Project _projectToEdit; 
+        private Project _projectToEdit;
 
         #endregion
 
@@ -66,7 +67,7 @@ namespace AddData
 
         #region Unity Lifecycle
 
-         private void Awake()
+        private void Awake()
         {
             if (_saveButton == null || _nameInput == null || _datePickerSettings == null ||
                 _addTaskScreen == null || _mainContent == null)
@@ -79,26 +80,34 @@ namespace AddData
             _tasks = new List<TaskData>();
             _saveButton.interactable = false;
             _nameInput.onValueChanged.AddListener(OnNameChanged);
-            UpdateTasksUI();
-
+        
             _addTaskScreen.gameObject.SetActive(false);
             _mainContent.SetActive(true);
+        
+            // Clear any existing data when the component awakens
+            ClearInputs();
+            UpdateTasksUI();
         }
 
         private void Start()
         {
             ToggleDatePicker(false);
+            if (_projectToEdit == null) // If not in edit mode
+            {
+                _date = DateTime.Now;
+                _dateText.text = _date.ToString("MMM dd, yyyy");
+            }
         }
 
         private void OnEnable()
         {
-            _date = DateTime.Now;
-            SetupAddTaskScreen();
-            
             _dateButton.onClick.AddListener(() => ToggleDatePicker(true));
             _addTaskButton.onClick.AddListener(OnAddTaskClicked);
             _saveButton.onClick.AddListener(OnSaveButtonClicked);
-            _backButton.onClick.AddListener(OnBackButtonClicked);
+
+            if (_backButton != null)
+                _backButton.onClick.AddListener(OnBackButtonClicked);
+
             _datePickerSettings.Content.OnSelectionChanged.AddListener(OnDateSelected);
 
             _addTaskScreen.OnTaskCreated += HandleNewTask;
@@ -109,8 +118,16 @@ namespace AddData
             {
                 taskPlane.OnTaskSelected += OnTaskSelected;
             }
-            
+
             _dateText.text = _date.ToString("MMM dd, yyyy");
+            
+            if (_projectToEdit == null && _date == default(DateTime))
+            {
+                _date = DateTime.Now;
+                _dateText.text = _date.ToString("MMM dd, yyyy");
+            }
+
+            SetupAddTaskScreen();
         }
 
         private void OnDisable()
@@ -118,7 +135,10 @@ namespace AddData
             _dateButton.onClick.RemoveListener(() => ToggleDatePicker(true));
             _addTaskButton.onClick.RemoveListener(OnAddTaskClicked);
             _saveButton.onClick.RemoveListener(OnSaveButtonClicked);
-            _backButton.onClick.RemoveListener(OnBackButtonClicked);
+
+            if (_backButton != null)
+                _backButton.onClick.RemoveListener(OnBackButtonClicked);
+            
             _datePickerSettings.Content.OnSelectionChanged.RemoveListener(OnDateSelected);
 
             _addTaskScreen.OnTaskCreated -= HandleNewTask;
@@ -135,9 +155,11 @@ namespace AddData
         {
             _nameInput.onValueChanged.RemoveListener(OnNameChanged);
         }
+
         #endregion
 
         #region Setup Methods
+
         private void SetupAddTaskScreen()
         {
             if (_addTaskScreen != null)
@@ -145,9 +167,11 @@ namespace AddData
                 _addTaskScreen._projectsScreen = this;
             }
         }
+
         #endregion
 
         #region Event Handlers
+
         public void SetProjectForEdit(Project project)
         {
             _projectToEdit = project;
@@ -161,7 +185,7 @@ namespace AddData
             UpdateTasksUI();
             ValidateInputs();
         }
-        
+
         private void OnNameChanged(string value)
         {
             _name = value?.Trim();
@@ -193,6 +217,7 @@ namespace AddData
                     openProjectScreen.OnBackFromEdit();
                 }
             }
+
             gameObject.SetActive(false);
         }
 
@@ -221,6 +246,7 @@ namespace AddData
                     openProjectScreen.OnProjectScreenClosed();
                 }
             }
+
             _mainContent.SetActive(true);
             _addTaskScreen.gameObject.SetActive(false);
         }
@@ -232,7 +258,7 @@ namespace AddData
             _addTaskScreen.gameObject.SetActive(true);
             _mainContent.SetActive(false);
         }
-        
+
         private void OnSaveButtonClicked()
         {
             Project project = GetProject();
@@ -247,14 +273,22 @@ namespace AddData
                 {
                     OnProjectCreated?.Invoke(project);
                 }
+
+                ClearInputs(); // Clear data after successful save
                 gameObject.SetActive(false);
             }
         }
+
         #endregion
 
         #region Public Methods
+
         public void EnableScreen()
         {
+            if (_projectToEdit == null)
+            {
+                ClearInputs();
+            }
             _mainContent.SetActive(true);
             UpdateTasksUI();
         }
@@ -276,9 +310,30 @@ namespace AddData
             UpdateTasksUI();
             ValidateInputs();
         }
+        
+        public void PrepareForNewProject()
+        {
+            ClearInputs();
+            _date = DateTime.Now;
+            _dateText.text = _date.ToString("MMM dd, yyyy");
+            _mainContent.SetActive(true);
+            UpdateTasksUI();
+            ValidateInputs();
+        }
+        
+        public void Show()
+        {
+            gameObject.SetActive(true);
+            if (_projectToEdit == null) // Если не в режиме редактирования
+            {
+                PrepareForNewProject();
+            }
+        }
+
         #endregion
 
         #region Helper Methods
+
         private void ToggleDatePicker(bool status)
         {
             _datePickerSettings.gameObject.SetActive(status);
@@ -308,6 +363,12 @@ namespace AddData
 
         private void ValidateInputs()
         {
+            if (_projectToEdit != null)
+            {
+                _saveButton.interactable = true;
+                return;
+            }
+
             bool isValid = !string.IsNullOrEmpty(_name?.Trim()) &&
                            _date != default(DateTime) &&
                            _tasks.Count > 0;
@@ -322,6 +383,7 @@ namespace AddData
             _name = string.Empty;
             _date = default(DateTime);
             _tasks.Clear();
+            _projectToEdit = null; // Also clear the edit reference
 
             _datePickerSettings.gameObject.SetActive(false);
             _addTaskScreen.gameObject.SetActive(false);
@@ -350,6 +412,7 @@ namespace AddData
                 return null;
             }
         }
+
         #endregion
     }
 }

@@ -99,6 +99,50 @@ namespace AddTask
             }
         }
         
+        public void SetTimeWithScroll(string hour, string minute, string ampm)
+        {
+            // Find and set the correct indices
+            int hourIndex = FindHourIndex(hour);
+            int minuteIndex = FindMinuteIndex(minute);
+            int ampmIndex = ampm.ToUpper() == "PM" ? 1 : 0;
+
+            // Set the scroll positions
+            if (hourIndex >= 0)
+                _hourScrollSnap.GoToPanel(hourIndex);
+    
+            if (minuteIndex >= 0)
+                _minuteScrollSnap.GoToPanel(minuteIndex);
+    
+            _ampmScrollSnap.GoToPanel(ampmIndex);
+
+            // Set the values
+            _hour = hour;
+            _minute = minute;
+            _ampm = ampm;
+        }
+        
+        private int FindHourIndex(string hour)
+        {
+            if (int.TryParse(hour, out int hourValue))
+            {
+                for (int i = 0; i < _hourText.Length; i++)
+                {
+                    if (_hourText[i].text == hour)
+                        return i;
+                }
+            }
+            return -1;
+        }
+
+        private int FindMinuteIndex(string minute)
+        {
+            if (int.TryParse(minute, out int minuteValue))
+            {
+                return minuteValue;
+            }
+            return -1;
+        }
+        
         public void SetTime(string hour, string minute, string ampm)
         {
             // These fields should already exist in your TimeSelector class

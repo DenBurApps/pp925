@@ -41,6 +41,8 @@ namespace CalendarScreen
         [Header("References")] [SerializeField]
         private DataManager _dataManager;
 
+        [SerializeField] private Settings _settings;
+
         [SerializeField] private MainScreenController _mainScreenController;
         [SerializeField] private CreateTaskScreenController _addTaskScreen;
 
@@ -48,10 +50,12 @@ namespace CalendarScreen
         private bool _hasLessons;
         private bool _hasHomeTasks;
         private DateTime _currentSelectedDate;
-
+        private ScreenVisabilityHandler _screenVisabilityHandler;
+        
         private void Awake()
         {
             SetupListeners();
+            _screenVisabilityHandler = GetComponent<ScreenVisabilityHandler>();
             _currentSelectedDate = DateTime.Today;
         }
 
@@ -93,7 +97,8 @@ namespace CalendarScreen
             }
 
             _addDataButton.onClick.AddListener(() => _addTaskScreen.gameObject.SetActive(true));
-            _mainScreenButton.onClick.AddListener((() => _mainScreenController.gameObject.SetActive(true)));
+            _mainScreenButton.onClick.AddListener(OpenMainScreen);
+            _settingsButton.onClick.AddListener(OpenSettings);
         }
 
         private void CleanupListeners()
@@ -123,13 +128,15 @@ namespace CalendarScreen
                 _lessonsWrapButton.onClick.RemoveAllListeners();
             }
 
-            _mainScreenButton.onClick.RemoveListener((() => _mainScreenController.gameObject.SetActive(true)));
+            _mainScreenButton.onClick.RemoveListener(OpenMainScreen);
+            _settingsButton.onClick.RemoveListener(OpenSettings);
             _addDataButton.onClick.RemoveListener(() => _addTaskScreen.gameObject.SetActive(true));
         }
 
         private void Start()
         {
             LoadDateData(DateTime.Today);
+            DisableScreen();
         }
 
         private void OnDateSelected(DateTime selectedDate)
@@ -145,6 +152,28 @@ namespace CalendarScreen
             LoadDateData(_currentSelectedDate);
         }
 
+        private void OpenMainScreen()
+        {
+            _screenVisabilityHandler.DisableScreen();
+            _mainScreenController.EnableScreen();
+        }
+
+        private void OpenSettings()
+        {
+            _settings.ShowSettings();
+            _screenVisabilityHandler.DisableScreen();
+        }
+
+        public void EnableScreen()
+        {
+            _screenVisabilityHandler.EnableScreen();
+        }
+
+        public void DisableScreen()
+        {
+            _screenVisabilityHandler.DisableScreen();
+        }
+        
         private void ClearCurrentData()
         {
             // Deactivate all project UIs
@@ -298,34 +327,6 @@ namespace CalendarScreen
                     _homeTasksContainer.gameObject.SetActive(_hasHomeTasks);
                     break;
             }
-        }
-
-        private void ShowAllSections()
-        {
-            _projectsContainer.gameObject.SetActive(_hasProjects);
-            _lessonsContainer.gameObject.SetActive(_hasLessons);
-            _homeTasksContainer.gameObject.SetActive(_hasHomeTasks);
-        }
-
-        private void ShowOnlyProjects()
-        {
-            _projectsContainer.gameObject.SetActive(_hasProjects);
-            _lessonsContainer.gameObject.SetActive(false);
-            _homeTasksContainer.gameObject.SetActive(false);
-        }
-
-        private void ShowOnlyLessons()
-        {
-            _projectsContainer.gameObject.SetActive(false);
-            _lessonsContainer.gameObject.SetActive(_hasLessons);
-            _homeTasksContainer.gameObject.SetActive(false);
-        }
-
-        private void ShowOnlyHomeTasks()
-        {
-            _projectsContainer.gameObject.SetActive(false);
-            _lessonsContainer.gameObject.SetActive(false);
-            _homeTasksContainer.gameObject.SetActive(_hasHomeTasks);
         }
 
         private void UpdateUIVisibility()

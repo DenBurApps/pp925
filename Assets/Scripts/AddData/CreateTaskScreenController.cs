@@ -9,26 +9,28 @@ namespace AddData
 {
     public class CreateTaskScreenController : MonoBehaviour
     {
-        [Header("Navigation")] [SerializeField]
-        private Button _backButton;
-
+        [Header("Navigation")]
+        [SerializeField] private Button _backButton;
         [SerializeField] private Button _lessonsButton;
         [SerializeField] private Button _homeTasksButton;
         [SerializeField] private Button _projectsButton;
 
-        [Header("Screen GameObjects")] [SerializeField]
-        private HomeTaskScreen _homeTaskScreen;
-
+        [Header("Screen GameObjects")]
+        [SerializeField] private HomeTaskScreen _homeTaskScreen;
         [SerializeField] private ProjectsScreen _projectScreen;
         [SerializeField] private LessonsScreen _lessonScreen;
         [SerializeField] private MainScreenController _mainScreenController;
 
-        [Header("Button Colors")] [SerializeField]
-        private Color _activeButtonColor;
+        [Header("Canvas Groups")]
+        [SerializeField] private CanvasGroup _homeTaskCanvasGroup;
+        [SerializeField] private CanvasGroup _projectCanvasGroup;
+        [SerializeField] private CanvasGroup _lessonCanvasGroup;
 
+        [Header("Button Colors")]
+        [SerializeField] private Color _activeButtonColor;
         [SerializeField] private Color _inactiveButtonColor;
 
-        private Dictionary<Button, GameObject> _screenMapping;
+        private Dictionary<Button, CanvasGroup> _screenMapping;
         private Button _currentActiveButton;
 
         public event Action<HomeTask> OnHomeTaskCreated;
@@ -40,9 +42,7 @@ namespace AddData
 
         private void Awake()
         {
-            if (_backButton == null || _lessonsButton == null || _homeTasksButton == null ||
-                _projectsButton == null || _homeTaskScreen == null || _projectScreen == null ||
-                _lessonScreen == null)
+            if (!ValidateComponents())
             {
                 Debug.LogError("Required components are not assigned in the inspector", this);
                 enabled = false;
@@ -71,20 +71,34 @@ namespace AddData
         #endregion
 
         #region Initialization
+        
+        private bool ValidateComponents()
+        {
+            return _backButton != null && 
+                   _lessonsButton != null && 
+                   _homeTasksButton != null &&
+                   _projectsButton != null && 
+                   _homeTaskScreen != null && 
+                   _projectScreen != null &&
+                   _lessonScreen != null &&
+                   _homeTaskCanvasGroup != null &&
+                   _projectCanvasGroup != null &&
+                   _lessonCanvasGroup != null;
+        }
 
         private void InitializeScreenMapping()
         {
-            _screenMapping = new Dictionary<Button, GameObject>
+            _screenMapping = new Dictionary<Button, CanvasGroup>
             {
-                { _homeTasksButton, _homeTaskScreen.gameObject },
-                { _projectsButton, _projectScreen.gameObject },
-                { _lessonsButton, _lessonScreen.gameObject }
+                { _homeTasksButton, _homeTaskCanvasGroup },
+                { _projectsButton, _projectCanvasGroup },
+                { _lessonsButton, _lessonCanvasGroup }
             };
 
             // Initially disable all screens
             foreach (var screen in _screenMapping.Values)
             {
-                screen.SetActive(false);
+                SetCanvasGroupState(screen, false);
             }
         }
 
@@ -121,7 +135,7 @@ namespace AddData
         private void OnBackButtonClick()
         {
             OnBackPressed?.Invoke();
-            gameObject.SetActive(false);
+            Hide();
         }
 
         private void ShowHomeTaskScreen()
@@ -147,14 +161,19 @@ namespace AddData
             if (_currentActiveButton != null)
             {
                 _currentActiveButton.image.color = _inactiveButtonColor;
-                _screenMapping[_currentActiveButton].SetActive(false);
+                SetCanvasGroupState(_screenMapping[_currentActiveButton], false);
             }
 
             // Activate new screen and button
             selectedButton.GetComponent<Image>().color = _activeButtonColor;
-            _screenMapping[selectedButton].SetActive(true);
+            SetCanvasGroupState(_screenMapping[selectedButton], true);
 
             _currentActiveButton = selectedButton;
+        }
+
+        private void SetCanvasGroupState(CanvasGroup canvasGroup, bool state)
+        {
+            canvasGroup.gameObject.SetActive(state);
         }
 
         #endregion
@@ -165,21 +184,22 @@ namespace AddData
         {
             OnHomeTaskCreated?.Invoke(homeTask);
             _mainScreenController.gameObject.SetActive(true);
-            gameObject.SetActive(false);
+            Hide();
         }
 
         private void HandleProjectCreated(Project project)
         {
             OnProjectCreated?.Invoke(project);
             _mainScreenController.gameObject.SetActive(true);
-            gameObject.SetActive(false);
+            _projectScreen.PrepareForNewProject();
+            Hide();
         }
 
         private void HandleLessonCreated(Lesson lesson)
         {
             OnLessonCreated?.Invoke(lesson);
             _mainScreenController.gameObject.SetActive(true);
-            gameObject.SetActive(false);
+            Hide();
         }
 
         #endregion

@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 #if UNITY_IOS
 using UnityEngine.iOS;
 #endif
@@ -14,6 +16,10 @@ public class Settings : MonoBehaviour
     [SerializeField] private GameObject _contactCanvas;
     [SerializeField] private GameObject _versionCanvas;
     [SerializeField] private TMP_Text _versionText;
+    [SerializeField] private MainScreenController _mainScreenController;
+    [SerializeField] private CalendarScreen.CalendarScreenController _calendarScreenController;
+    [SerializeField] private Button _calendarButton;
+    [SerializeField] private Button _mainScreenButton;
     private string _version = "Application version:\n";
 
     private void Awake()
@@ -26,6 +32,18 @@ public class Settings : MonoBehaviour
         SetVersion();
     }
 
+    private void OnEnable()
+    {
+        _mainScreenButton.onClick.AddListener(OpenMainScreen);
+        _calendarButton.onClick.AddListener(OpenCalendar);
+    }
+
+    private void OnDisable()
+    {
+        _mainScreenButton.onClick.RemoveListener(OpenMainScreen);
+        _calendarButton.onClick.RemoveListener(OpenCalendar);
+    }
+
     private void SetVersion()
     {
         _versionText.text = _version + Application.version;
@@ -34,6 +52,18 @@ public class Settings : MonoBehaviour
     public void ShowSettings()
     {
         _settingsCanvas.SetActive(true);
+    }
+
+    private void OpenMainScreen()
+    {
+        _mainScreenController.EnableScreen();
+        _settingsCanvas.SetActive(false);
+    }
+
+    private void OpenCalendar()
+    {
+        _calendarScreenController.EnableScreen();
+        _settingsCanvas.SetActive(false);
     }
 
     public void RateUs()

@@ -74,13 +74,13 @@ namespace AddData
         {
             if (_componentsValidated)
             {
-                ResetUI();
                 InitializeDefaultDateTime();
             }
         }
 
         private void OnEnable()
         {
+            ValidateComponents();
             if (_componentsValidated)
             {
                 SubscribeToEvents();
@@ -100,6 +100,49 @@ namespace AddData
 
         #endregion
 
+        #region Button Click Handlers
+
+        private void OnTimeButtonClick()
+        {
+            ToggleTimePlane(true);
+        }
+
+        private void OnDateButtonClick()
+        {
+            ToggleDatePicker(true);
+        }
+
+        private void OnPriorityButtonClick()
+        {
+            ToggleFilterPanel(true);
+        }
+
+        private void OnSaveButtonClick()
+        {
+            HomeTask homeTask = GetHomeTask();
+            if (homeTask != null)
+            {
+                if (_taskToEdit != null)
+                {
+                    Debug.Log($"Edited task: {homeTask.Name}");
+                    OnHomeTaskEdited?.Invoke(_taskToEdit, homeTask);
+                    _taskToEdit = null;
+                }
+                else
+                {
+                    Debug.Log($"Created new task: {homeTask.Name}");
+                    OnHomeTaskCreated?.Invoke(homeTask);
+                }
+                ResetUI();
+            }
+            else
+            {
+                Debug.LogError("Failed to create/edit HomeTask - validation failed");
+            }
+        }
+
+        #endregion
+
         #region Initialization
         
         public void SetHomeTaskForEdit(HomeTask task)
@@ -113,8 +156,22 @@ namespace AddData
             // Update UI
             _nameInput.text = _name;
             _subjectInput.text = _subject;
-            _dateText.text = _date.ToString("MMM dd, yyyy");
+            UpdateDateTimeDisplay();
             _priorityText.text = _priority;
+
+            // Initialize TimeSelector with existing time
+            if (_timeSelector != null)
+            {
+                int hour = _date.Hour % 12;
+                if (hour == 0) hour = 12;
+                string ampm = _date.Hour >= 12 ? "PM" : "AM";
+        
+                _timeSelector.SetTimeWithScroll(
+                    hour.ToString("00"), 
+                    _date.Minute.ToString("00"), 
+                    ampm
+                );
+            }
 
             // Set priority button state
             if (_filterButtons != null)
@@ -130,8 +187,6 @@ namespace AddData
 
             ValidateInputs();
         }
-
-        
 
         private void ValidateComponents()
         {
@@ -236,8 +291,7 @@ namespace AddData
             int hour = _date.Hour % 12;
             if (hour == 0) hour = 12;
             string ampm = _date.Hour >= 12 ? "PM" : "AM";
-
-
+            
             _timeText.text = $"{_date.Hour}:{_date.Minute} {ampm}";
         }
 
@@ -245,11 +299,16 @@ namespace AddData
         {
             if (!_isInitialized) return;
 
-            _priorityButton?.onClick.AddListener(() => ToggleFilterPanel(true));
-            _dateButton?.onClick.AddListener(() => ToggleDatePicker(true));
-            _timeButton?.onClick.AddListener(() => ToggleTimePlane(true));
-            _saveButton?.onClick.AddListener(OnSaveButtonClicked);
+            // Remove existing listeners first
+            UnsubscribeFromEvents();
 
+            // Button click events
+            _timeButton?.onClick.AddListener(OnTimeButtonClick);
+            _dateButton?.onClick.AddListener(OnDateButtonClick);
+            _priorityButton?.onClick.AddListener(OnPriorityButtonClick);
+            _saveButton?.onClick.AddListener(OnSaveButtonClick);
+
+            // TimeSelector events
             if (_timeSelector != null)
             {
                 _timeSelector.HourInputed += SetHour;
@@ -257,11 +316,13 @@ namespace AddData
                 _timeSelector.AmPmInputed += SetAmPm;
             }
 
+            // DatePicker events
             if (_datePickerSettings?.Content != null)
             {
                 _datePickerSettings.Content.OnSelectionChanged.AddListener(OnDateSelected);
             }
 
+            // Filter buttons events
             if (_filterButtons != null)
             {
                 foreach (var button in _filterButtons)
@@ -276,11 +337,28 @@ namespace AddData
 
         private void UnsubscribeFromEvents()
         {
-            _priorityButton?.onClick.RemoveListener(() => ToggleFilterPanel(true));
-            _dateButton?.onClick.RemoveListener(() => ToggleDatePicker(true));
-            _timeButton?.onClick.RemoveListener(() => ToggleTimePlane(true));
-            _saveButton?.onClick.RemoveListener(OnSaveButtonClicked);
+            // Button click events
+            if (_timeButton != null)
+            {
+                _timeButton.onClick.RemoveAllListeners();
+            }
+            
+            if (_dateButton != null)
+            {
+                _dateButton.onClick.RemoveAllListeners();
+            }
+            
+            if (_priorityButton != null)
+            {
+                _priorityButton.onClick.RemoveAllListeners();
+            }
+            
+            if (_saveButton != null)
+            {
+                _saveButton.onClick.RemoveAllListeners();
+            }
 
+            // TimeSelector events
             if (_timeSelector != null)
             {
                 _timeSelector.HourInputed -= SetHour;
@@ -288,11 +366,13 @@ namespace AddData
                 _timeSelector.AmPmInputed -= SetAmPm;
             }
 
+            // DatePicker events
             if (_datePickerSettings?.Content != null)
             {
-                _datePickerSettings.Content.OnSelectionChanged.RemoveListener(OnDateSelected);
+                _datePickerSettings.Content.OnSelectionChanged.RemoveAllListeners();
             }
 
+            // Filter buttons events
             if (_filterButtons != null)
             {
                 foreach (var button in _filterButtons)
@@ -309,42 +389,38 @@ namespace AddData
 
         #region UI Event Handlers
 
-        private void OnSaveButtonClicked()
-        {
-            HomeTask homeTask = GetHomeTask();
-            if (homeTask != null)
-            {
-                if (_taskToEdit != null)
-                {
-                    Debug.Log($"Edited task: {homeTask.Name}");
-                    OnHomeTaskEdited?.Invoke(_taskToEdit, homeTask);
-                    _taskToEdit = null;
-                }
-                else
-                {
-                    Debug.Log($"Created new task: {homeTask.Name}");
-                    OnHomeTaskCreated?.Invoke(homeTask);
-                }
-                ResetUI();
-            }
-            else
-            {
-                Debug.LogError("Failed to create/edit HomeTask - validation failed");
-            }
-        }
-        
         private void ToggleTimePlane(bool status)
         {
             if (_timeScroll != null)
             {
-                if (_timeScroll.activeSelf)
-                    status = false;
-
+                // If open and trying to open - close
+                if (_timeScroll.activeSelf && status)
+                {
+                    _timeScroll.SetActive(false);
+                    ValidateInputs();
+                    return;
+                }
+        
                 _timeScroll.SetActive(status);
+        
+                // Initialize time when opening
                 if (status)
                 {
-                    _priorityPlane?.SetActive(false);
-                    _datePickerSettings?.gameObject.SetActive(false);
+                    DateTime timeToSet = _taskToEdit != null ? _taskToEdit.DateTime : DateTime.Now;
+                    int hour = timeToSet.Hour % 12;
+                    if (hour == 0) hour = 12;
+                    string ampm = timeToSet.Hour >= 12 ? "PM" : "AM";
+    
+                    _timeSelector.SetTimeWithScroll(
+                        hour.ToString("00"), 
+                        timeToSet.Minute.ToString("00"), 
+                        ampm
+                    );
+                }
+
+                if (!status)
+                {
+                    ValidateInputs();
                 }
             }
         }
@@ -442,6 +518,17 @@ namespace AddData
         {
             UpdateTimeText();
         }
+        
+        private void UpdateDateTimeDisplay()
+        {
+            _dateText.text = _date.ToString("MMM dd, yyyy");
+    
+            string ampm = _date.Hour >= 12 ? "PM" : "AM";
+            int hour = _date.Hour % 12;
+            if (hour == 0) hour = 12;
+            _time = $"{hour}:{_date.Minute:D2} {ampm}";
+            _timeText.text = _time;
+        }
 
         private void SetAmPm(string ampm)
         {
@@ -457,7 +544,6 @@ namespace AddData
                 ValidateInputs();
             }
         }
-
         #endregion
 
         #region Helper Methods

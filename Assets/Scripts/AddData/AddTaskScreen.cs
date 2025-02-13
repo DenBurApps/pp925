@@ -194,12 +194,31 @@ namespace AddData
         {
             if (_timeScroll != null)
             {
-                if (_timeScroll.activeSelf)
+                // Если открыто и пытаемся открыть - закрываем
+                if (_timeScroll.activeSelf && status)
                 {
-                    status = false;
+                    _timeScroll.SetActive(false);
+                    ValidateInputs();
+                    return;
+                }
+        
+                _timeScroll.SetActive(status);
+        
+                // Инициализируем время при открытии
+                if (status)
+                {
+                    DateTime timeToSet = _existingTask != null ? _existingTask.DateTime : DateTime.Now;
+                    int hour = timeToSet.Hour % 12;
+                    if (hour == 0) hour = 12;
+                    string ampm = timeToSet.Hour >= 12 ? "PM" : "AM";
+    
+                    _timeSelector.SetTimeWithScroll(
+                        hour.ToString("00"), 
+                        timeToSet.Minute.ToString("00"), 
+                        ampm
+                    );
                 }
 
-                _timeScroll.SetActive(status);
                 if (!status)
                 {
                     ValidateInputs();
@@ -255,9 +274,12 @@ namespace AddData
 
         private void UpdateTimeText()
         {
-            _time = $"{_timeSelector.Hour}:{_timeSelector.Minute} {_timeSelector.AmPm}";
-            _timeText.text = _time;
-            ValidateInputs();
+            if (_timeSelector != null && _timeText != null)
+            {
+                _time = $"{_timeSelector.Hour}:{_timeSelector.Minute} {_timeSelector.AmPm}";
+                _timeText.text = _time;
+                ValidateInputs();
+            }
         }
 
         #endregion
@@ -266,35 +288,54 @@ namespace AddData
 
         private void ValidateInputs()
         {
-            if (_isEditMode)
-            {
-                _saveButton.interactable = false;
-                return;
-            }
-
             bool isValid = !string.IsNullOrEmpty(_name?.Trim()) &&
                            !string.IsNullOrEmpty(_time) &&
                            !string.IsNullOrEmpty(_priority) &&
-                           _date != default(DateTime);
+                           _date != default(DateTime) &&
+                           IsValidTime();
 
-            _saveButton.interactable = isValid;
+            _saveButton.interactable = !_isEditMode && isValid;
         }
 
+        private bool IsValidTime()
+        {
+            if (_timeSelector == null) return false;
+
+            if (!int.TryParse(_timeSelector.Hour, out int hour) ||
+                !int.TryParse(_timeSelector.Minute, out int minute))
+            {
+                return false;
+            }
+
+            bool validHour = hour >= 1 && hour <= 12;
+            bool validMinute = minute >= 0 && minute <= 59;
+            bool validAmPm = _timeSelector.AmPm.ToUpper() == "AM" ||
+                             _timeSelector.AmPm.ToUpper() == "PM";
+
+            return validHour && validMinute && validAmPm;
+        }
+        
         private void PopulateExistingTaskData(TaskData task)
         {
             _nameInput.text = task.Name;
             _name = task.Name;
 
-            _date = task.DateTime.Date;
-            _dateText.text = _date.ToString("MMM dd, yyyy");
+            _date = task.DateTime;
+            UpdateDateTimeDisplay();
 
-            string ampm = task.DateTime.Hour >= 12 ? "PM" : "AM";
-            int hour = task.DateTime.Hour % 12;
-            if (hour == 0) hour = 12;
-
-            _timeText.text = $"{hour}:{_date.Minute} {ampm}";
-
-            UpdateTimeText();
+            // Initialize TimeSelector with existing time
+            if (_timeSelector != null)
+            {
+                int hour = _date.Hour % 12;
+                if (hour == 0) hour = 12;
+                string ampm = _date.Hour >= 12 ? "PM" : "AM";
+        
+                _timeSelector.SetTimeWithScroll(
+                    hour.ToString("00"), 
+                    _date.Minute.ToString("00"), 
+                    ampm
+                );
+            }
 
             _priority = task.Priority;
             _priorityText.text = task.Priority;
@@ -307,6 +348,17 @@ namespace AddData
                     break;
                 }
             }
+        }
+        
+        private void UpdateDateTimeDisplay()
+        {
+            _dateText.text = _date.ToString("MMM dd, yyyy");
+    
+            string ampm = _date.Hour >= 12 ? "PM" : "AM";
+            int hour = _date.Hour % 12;
+            if (hour == 0) hour = 12;
+            _time = $"{hour}:{_date.Minute:D2} {ampm}";
+            _timeText.text = _time;
         }
 
         private void ClearInputs()
